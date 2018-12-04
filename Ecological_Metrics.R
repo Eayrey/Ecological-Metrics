@@ -87,24 +87,8 @@ species_predictor=function(crown){
   heights <- heights[,colSums(is.na(heights))<nrow(heights)]
   if (is.matrix(heights) & sum(heights, na.rm=TRUE)>0){
     heights <- heights[rowSums(is.na(heights))<ncol(heights),]
-  } else{
-    CV_EW=NA  #####
-    loc_max_EW=NA  #####
-    loc_max_EW_tot=NA  #####
-    perc_max_EW=NA   ####
-    coefx_EW=NA  ####
-    coefx2_EW=NA  ####
-    CV_NS=NA  #####
-    loc_max_NS=NA  #####
-    loc_max_NS_tot=NA   #####
-    perc_max_NS=NA   ####
-    coefx_NS=NA   ####
-    coefx2_NS=NA   ####
-    CV_allNS=NA  ####
-    CV_allEW=NA   ####
   }
   if (is.matrix(heights) & sum(heights, na.rm=TRUE)>0){
-    heights <- heights[rowSums(is.na(heights))<ncol(heights),]
     max_coords=which(heights == max(heights, na.rm=TRUE), arr.ind = TRUE)
     max_coords=max_coords[1,]
     east_west=heights[max_coords[1],]
@@ -169,9 +153,9 @@ species_predictor=function(crown){
   mean_difs2_perc=mean(diffs[diffs!=0])/max(surrounding[[1]])   ##########
   SD_difs2_perc=sd(diffs[diffs!=0])/max(surrounding[[1]])   #######
   
-  #circularity=(perimeter(tree)^2)/(4*3.14159*area(tree))    ######
-  width=ncol(heights)*.75
-  height=nrow(heights)*.75
+  circularity=(perimeter(tree)^2)/(4*3.14159*area(tree))    ######
+  width=extent(tree)[2]-extent(tree)[1]
+  height=extent(tree)[4]-extent(tree)[3]
   crown_width=width+height/2
   WidthToHeight=crown_width/max(surrounding[[1]])    ######
   
@@ -182,25 +166,9 @@ species_predictor=function(crown){
   pred=1/(1+(1/exp(pred)))
   pred=ifelse(pred>.69,1,0)
   pred=ifelse(is.na(pred),.7,pred)
-  if (length(pred)==0){
-    pred=1
-  }
   pred
 }
 
-#Guassian kernal smoothing, not really needed since sigma never changes
-fgauss <- function(sigma, n=3) {
-    m <- matrix(nc=n, nr=n)
-    col <- rep(1:n, n)
-    row <- rep(1:n, each=n)
-    x <- col - ceiling(n/2)
-    y <- row - ceiling(n/2)
-    # according to http://en.wikipedia.org/wiki/Gaussian_filter
-    m[cbind(row, col)] <- 1/(2*pi*sigma^2) * exp(-(x^2+y^2)/(2*sigma^2))
-    # sum of weights should add up to 1	
-    m / sum(m)
-}
-  
 lclmaxer=function(tiff, plotShape, plotShape_b){
   #First smooth CHM
   #smoothed=focal(tiff, w=matrix(1, nrow=3, ncol=3),fun=function(x){mean(x,na.rm=TRUE)})
@@ -280,7 +248,7 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
   Percentile_60=quantile(all_values, .6)  #####COVARIATE
   Percentile_80=quantile(all_values, .8)  #####COVARIATE
   Percentile_95=quantile(all_values, .95)  #####COVARIATE
-
+  
   
   ######################################Watershed ALGORITHM, SORT, FILL####################################### 
   #points_notbuffed=rasterToPoints(raster::mask(trueLM, plotShape))
@@ -291,14 +259,7 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
   cells=data.frame(cellz=as.vector(cellz))
   id=rownames(cells)
   cells=cbind(id=id,cells)
-
-  tryCatch({
-    cells[(cells$cellz<=-100 & !is.na(cells$cellz)),]$cellz=-100
-  }, error=function(e){
-    cells
-  }
-  )
-  
+  cells[(cells$cellz<=-100 & !is.na(cells$cellz)),]$cellz=-100
   cellsS=arrange(cells, cellz)
   cells$basin=NA
   cells$id=as.numeric(as.character(cells$id))
@@ -356,15 +317,9 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
     heights=(tiff[indicies])
     indicies[heights<=max(na.omit(heights))*.5]})
   bads=unlist(bads)
+  basins[bads]=NA
   #reclassify to isolate trees further segmented by the above proceedure
-  basins=tryCatch({
-    basins[bads]=NA
-    reclasser(basins)
-  }, error=function(e){
-    basins
-  }
-  )
-
+  basins=reclasser(basins)
   #remove lone cells surrounded by NA, may eliminate small trees
   #basins=focal(basins, w=matrix(c(NA,1,NA,1,1,1,NA,1,NA),ncol=3, nrow=3),fun=function(x){
   # if(sum(is.na(x))>7){
@@ -491,9 +446,9 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
       encroach_area=0
       encroach_mean=0
     }
-  
+    
     canopy_cover_NB=1-mean(is.na(extract(basins, plotShape)[[1]])) #####COVARIATE
-
+    
     perc_in_tally=sum(na.omit(perc_in_tally))   #####COVARIATE
     biomass_in=sum(na.omit(biomass))   #####COVARIATE
     biomass_tot=sum(na.omit(biomassT))   #####COVARIATE
@@ -520,9 +475,6 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
     #kurt_crown_volumes=kurtosis(crown_volumes)   #####COVARIATE
     #skew_crown_volumes=skewness(crown_volumes)   #####COVARIATE
   } else{
-    points_notbuffed=data.frame(x=0,y=0,z=0)
-    ppp_notbuffed=NULL
-    ppp_buffed=NULL
     perc_in_tally=0   
     biomass_in=0   
     biomass_tot=0   
@@ -572,19 +524,13 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
     #med_range_ht=0   #####COVARIATE
   }
   ###############################END OF WATERSHED STUFF##########################################  
-
+  
   #nn dists
-
+  
   nndists_NB=nndist(ppp_notbuffed)
   nndists=nndist(ppp_buffed)
   if (length(nndists_NB)<2){
     mean_dists_NB=0 #####COVARIATE
-    SD_dists_NB=0  #####COVARIATE
-    #med_dists_NB=0  #####COVARIATE
-    skew_dists_NB=0  #####COVARIATE
-    kurt_dists_NB=0  #####COVARIATE
-  }else if (length(nndists_NB)==2){
-    mean_dists_NB=mean(nndists_NB)
     SD_dists_NB=0  #####COVARIATE
     #med_dists_NB=0  #####COVARIATE
     skew_dists_NB=0  #####COVARIATE
@@ -602,12 +548,6 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
     #med_dists_B=0  #####COVARIATE
     skew_dists_B=0  #####COVARIATE
     kurt_dists_B=0  #####COVARIATE
-  }else if (length(nndists_NB)==2){
-    mean_dists_B=mean(nndists)
-    SD_dists_B=0  #####COVARIATE
-    #med_dists_B=0  #####COVARIATE
-    skew_dists_B=0  #####COVARIATE
-    kurt_dists_B=0  #####COVARIATE
   }else{
     mean_dists_B=mean(nndists)  #####COVARIATE
     SD_dists_B=sd(nndists)  #####COVARIATE
@@ -617,14 +557,14 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
   }
   
   #Bon Voroni Growing Space
-  if (length(nndists_NB)>2){
+  if (ppp_notbuffed$n>0){
     all_areas=dirichletWeights(ppp_buffed, exact=FALSE)
     all_areasNB=dirichletWeights(ppp_notbuffed, exact=FALSE)
-    mean_growing_space=mean(all_areas)  #####COVARIATE
-    sd_growing_space=sd(all_areas)   #####COVARIATE
-    max_growing_space=max(all_areas)   #####COVARIATE
-    #skew_growing_space=skewness(all_areas)   #####COVARIATE
-    #kurt_growing_space=kurtosis(all_areas)   #####COVARIATE
+    mean_growing_space=mean(areas_notbuffed)  #####COVARIATE
+    sd_growing_space=sd(areas_notbuffed)   #####COVARIATE
+    max_growing_space=max(areas_notbuffed)   #####COVARIATE
+    #skew_growing_space=skewness(areas_notbuffed)   #####COVARIATE
+    #kurt_growing_space=kurtosis(areas_notbuffed)   #####COVARIATE
     mean_growing_spaceNB=mean(all_areasNB)  #####COVARIATE
     sd_growing_spaceNB=sd(all_areasNB)   #####COVARIATE    
   }else{
@@ -708,7 +648,7 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
           ht_live_crown=nearby_tree_locs$layer[neighbor]*.66
           triangle=((nearby_tree_locs$layer[neighbor]-ht_live_crown)*lcw)/2
           
-          #detirmine size of shadow in degrees, accounting for circularity
+          #???
           shadow_size=seq(from=round(nearby_tree_locs$azis[neighbor]-.5*round(obsc)),to=round(nearby_tree_locs$azis[neighbor]+.5*round(obsc)))
           shadow_size=sapply(shadow_size, function(x) if(x>360){x-360}else{x})
           shadow_size=unique(sapply(shadow_size, function(x) if(x<0){360+x}else{x}))
@@ -789,7 +729,7 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
   }  
   
   ###################################### END OF Crown Light Availibility#############################################
-
+  
   
   #pointiness, mean and standard deviation
   if (nrow(points_notbuffed)>1){  
@@ -810,13 +750,12 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
         c(mean(diffs), sd(diffs), mean(perc_difs), sd(perc_difs))
       }
     }))
-      
     mean_raw_pointy=mean(na.omit(pointyness[,1])) #####COVARIATE
     sd_raw_pointy=mean(na.omit(pointyness[,2])) #####COVARIATE
     mean_pointy=mean(na.omit(pointyness[,3])) #####COVARIATE
     sd_pointy=mean(na.omit(pointyness[,4])) #####COVARIATE
     
-  }else if (points_notbuffed[,3]>0){
+  }else if (nrow(points_notbuffed)==1){
     arounds=data.frame(extract(tiff,matrix(points_notbuffed[1,1:2], ncol=2), buffer=1.25, cellnumbers=TRUE, na.rm=TRUE))
     surrounding=na.omit(arounds$value)
     diffs=max(surrounding)-surrounding
@@ -831,42 +770,38 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
     mean_pointy=0
     sd_pointy=0
   }
-###########################################################################################  
+  ###########################################################################################  
   #Clustered or not..
-  if (length(nndists_NB)>2){
-    kest=Kest(ppp_buffed, correction="border")
-    kest$border[is.nan(kest$border)]<-0
-    if (ppp_buffed$n==1){csr=1
-    }else if(ppp_buffed$n>25){csr=0
-    }else {
-      env=envelopes[ppp_buffed$n-1,]
-      #some below envelope min, none above
-      if (sum((kest$border-env$mins)<0) > 0 && sum((env$maxes-kest$border)<0) < 1){
-        #evenly spaced
-        csr=1
-     }
-      #some above the envelope max, none below
-      if (sum((kest$border-env$mins)<0) < 1 && sum((env$maxes-kest$border)<0) > 0){
-        #clustered
-        csr=2
-      }
-      #some above and below the envelope
-      if (sum((kest$border-env$mins)<0) > 0 && sum((env$maxes-kest$border)<0) > 0){
-        #clustered and spaced at different scales
-        csr=3
-      }
-      #if observed were all above lower envelope, and all less than the upper envelope
-      if (sum((kest$border-env$mins)<0) == 0 && sum((env$maxes-kest$border)<0) == 0){
-        #randomly distributed
-        csr=0
-      }
+  kest=Kest(ppp_buffed, correction="border")
+  kest$border[is.nan(kest$border)]<-0
+  if (ppp_buffed$n==1){csr=1
+  }else if(ppp_buffed$n>25){csr=0
+  }else {
+    env=envelopes[ppp_buffed$n-1,]
+    #some below envelope min, none above
+    if (sum((kest$border-env$mins)<0) > 0 && sum((env$maxes-kest$border)<0) < 1){
+      #evenly spaced
+      csr=1
     }
-  }else{
-    csr=0
+    #some above the envelope max, none below
+    if (sum((kest$border-env$mins)<0) < 1 && sum((env$maxes-kest$border)<0) > 0){
+      #clustered
+      csr=2
+    }
+    #some above and below the envelope
+    if (sum((kest$border-env$mins)<0) > 0 && sum((env$maxes-kest$border)<0) > 0){
+      #clustered and spaced at different scales
+      csr=3
+    }
+    #if observed were all above lower envelope, and all less than the upper envelope
+    if (sum((kest$border-env$mins)<0) == 0 && sum((env$maxes-kest$border)<0) == 0){
+      #randomly distributed
+      csr=0
+    }
   }
   ####csr IS A COVARIATE
   
-##########################################################################################
+  ##########################################################################################
   ####Edge detection####, Lapacian transform
   Laplacian=matrix(-1, 3, 3)
   Laplacian[2, 2] <- 8
@@ -916,7 +851,7 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
     mean_off_cent=0
     sd_off_cent=0
   }
-    
+  
   
   basins=disaggregate(basins, 4)
   edges=boundaries(basins,classes=TRUE, type='inner', directions=4, asNA=TRUE)
@@ -972,7 +907,7 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
     CEH=0   
   }
   
-  if (exists("crown_volumesT")){
+  if (exists("crown_volumes")){
     if (length(crown_volumesT)>1){
       #Simpson index with 10m volume bins
       x=20
@@ -1064,9 +999,9 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
   countLM_P10=length(LMheights[LMheights>10])  #####COVARIATE
   countLM=length(LMheights)  #####COVARIATE
   
-  out_in_ratioC=ifelse(is.nan(count/countLM),0,count/countLM)
-  out_in_ratioH=ifelse(is.nan(height_mean/heightLM_mean),0,height_mean/heightLM_mean)
-     
+  out_in_ratioC=count/countLM
+  out_in_ratioH=height_mean/heightLM_mean
+  
   return (c(#general CHM metrics
     total_mean, total_median, total_sd, total_range, total_skew, total_kurt, Perc_Above_P20, Perc_Above_P40,
     Perc_Above_P60, Perc_Above_P80, Perc_Above_P95, Perc_Above_5m, Perc_Above_10m, Perc_Above_15m, Perc_Above_20m,
@@ -1074,28 +1009,20 @@ lclmaxer=function(tiff, plotShape, plotShape_b){
     #Canopy complexity metrics
     mean_dists_NB, SD_dists_NB, skew_dists_NB, kurt_dists_NB,mean_dists_B, SD_dists_B, skew_dists_B, kurt_dists_B,
     mean_growing_space, sd_growing_space, max_growing_space, mean_growing_spaceNB, sd_growing_spaceNB,
-    canopy_cover_NB, 
-    csr, 
-    rugoseS_count, rugoseS_mean, rugoseS_sd, rugoseL_mean, rugoseL_sd, 
-    pt2Sedge_mean, pt2Sedge_max, 
-    SIMH, GINIH, TDH, CEH, #SIMV, GINIV, TDV,
-    out_in_ratioC,out_in_ratioH,
+    canopy_cover_NB, csr, rugoseS_count, rugoseS_mean, rugoseS_sd, rugoseL_mean, rugoseL_sd, 
+    pt2Sedge_mean, pt2Sedge_max, mean_off_cent, sd_off_cent, SIMH, GINIH, TDH, CEH, SIMV, GINIV, TDV,out_in_ratioC,
+    out_in_ratioH,
     #Tree metrics
-    mean_crown_area_B, SD_crown_area_B, max_crown_area_B, 
-    watershed_count_inplot, mean_crown_area_NB,
-    max_crown_area_NB, 
-    encroaching_tree_count, encroach_area, encroach_mean, perc_in_tally, 
+    mean_crown_area_B, SD_crown_area_B, max_crown_area_B, watershed_count_inplot, mean_crown_area_NB,
+    max_crown_area_NB, encroaching_tree_count, encroach_area, encroach_mean, perc_in_tally, 
     biomass_in, biomass_tot, crown_volume_tot, crown_volume_in, basal_area_tot, basal_area_in,
-    softwoodyness,
-    mean_crown_volumes, SD_crown_volumes, mean_top_ht, tot_top_ht, mean_ht, 
-    mean_residuals,sd_residuals, mean_positivity, sd_positivity, mean_top_positivity, 
-    mean_raw_pointy,sd_raw_pointy, mean_pointy, sd_pointy, 
-    mean_off_cent, sd_off_cent, pt2WSedge_mean, pt2WSedge_sd, 
-    pt2WSedge_max, rugose_WS_perc, 
-    heightB_mean, heightB_sd, heightB_med, heightB_max, heightB_min,
-    heightB_25, heightB_75, heightB_90, countB_P30, countB_P20, countB_P10, countB, 
-    height_mean,height_sd, height_max, height_25, height_75, count_P30, count_P20, count_P10, count, 
-    heightLM_mean,heightLM_sd, countLM_P30, countLM_P20, countLM_P10, countLM,
+    softwoodyness, mean_crown_volumes, SD_crown_volumes, mean_top_ht, tot_top_ht, mean_ht, 
+    mean_residuals,sd_residuals, mean_positivity, sd_positivity, mean_top_positivity, mean_raw_pointy,
+    sd_raw_pointy, mean_pointy, sd_pointy, mean_off_cent, sd_off_cent, pt2WSedge_mean, pt2WSedge_sd, 
+    pt2WSedge_max, rugose_WS_perc, heightB_mean, heightB_sd, heightB_med, heightB_max, heightB_min,
+    heightB_25, heightB_75, heightB_90, countB_P30, countB_P20, countB_P10, countB, height_mean, 
+    height_sd, height_max, height_25, height_75, count_P30, count_P20, count_P10, count, heightLM_mean,
+    heightLM_sd, countLM_P30, countLM_P20, countLM_P10, countLM,
     #Competition metrics summed
     mean_obscured,sd_obscured,mean_shadowed,sd_shadowed,kurt_shadowed,sky_view_areas_m,sky_view_areas_sd,
     neighbor_top_dist_m,neighbor_top_dist_sd
@@ -1114,7 +1041,7 @@ pnt_fnder=function(inFile){
   #high_pts[complete.cases(high_pts),]
 }
 
-tiner=function(){
+tiner=function(high_pts){
   #make tin
   high_pts=high_pts[!duplicated(high_pts[,1:2]),]
   tin=tryCatch({
@@ -1166,215 +1093,128 @@ tiner=function(){
 }
 
 #####################INITIALIZE######################################
+#inShape_b=readShapePoly("G:\\7_1_2016_Reorganized_Training\\Plot_Shapefiles\\Baxter_Plots\\Baxter_Ninths_Buffed.shp")
+#inShape=readShapePoly("G:\\7_1_2016_Reorganized_Training\\Plot_Shapefiles\\Baxter_Plots\\Baxter_Ninths.shp")
+
+#plots=levels(inShape[1,]$Plot_Subpl)
+#plot_fuckedup=levels(inShape_b[1,]$Plot_Subpl)
+directory="F:\\Demeritt\\State_LiDAR\\LIDAR"
+files=list.files(directory, pattern="*.las")
 SiteProd= raster("E:\\Aaron's site productivity\\Tiff_Aaron_Prod.tif")
 
-inShape=readShapePoly("G:\\1_19_2017_Combination\\Plot_Shapefiles\\UTM19\\All_Plots_UTM19.shp")
-inShape_b=readShapePoly("G:\\1_19_2017_Combination\\Plot_Shapefiles\\UTM19\\All_Plots_UTM19_buf.shp")
-#SiteProd= raster("E:\\Aaron's site productivity\\Tiff_Aaron_Prod.tif")
-INV_plots=levels(inShape_b$INV_Plot)
-fpath="G:\\1_19_2017_Combination\\LiDAR\\"
-INVS=levels(inShape_b$INV)
-
-results=NULL
-cl=makeCluster(10)
+cl=makeCluster(40)
 registerDoParallel(cl)
-for (s in 1:length(INVS)){
-  aquis=list.dirs(paste(fpath,INVS[s], sep=''), recursive=FALSE)
-  if (length(aquis)>0){
-    for (a in aquis){
-      Aquisiton=basename(a)
-      plots=INV_plots[startsWith(INV_plots,INVS[s])]
-      plot_nums=list.files(a)
-      #plot_nums=sub('.*\\_', '', plots)
-      results=foreach(m=1:length(plot_nums), .combine='rbind', .errorhandling="pass", .packages=c("rgdal")) %dopar% {
-        library("raster", lib.loc="~/R/win-library/3.3")
-        library("spatstat", lib.loc="~/R/win-library/3.3")
-        library("plyr", lib.loc="~/R/win-library/3.3")
-        library("doParallel", lib.loc="~/R/win-library/3.3")
-        library("aspace", lib.loc="~/R/win-library/3.3")
-        library("maptools", lib.loc="~/R/win-library/3.3")
-        library("moments", lib.loc="~/R/win-library/3.3")
-        library("rLiDAR", lib.loc="~/R/win-library/3.2")
-        library("fields", lib.loc="~/R/win-library/3.3")
-        library("RANN")
-        library("tripack")
-        plotShape_b = inShape_b[inShape_b$INV_Plot==substr(paste(INVS[s],plot_nums[m], sep="_"),1,nchar(paste(INVS[s],plot_nums[m], sep="_"))-4) ,]
-        plotShape = inShape[inShape$INV_Plot==substr(paste(INVS[s],plot_nums[m], sep="_"),1,nchar(paste(INVS[s],plot_nums[m], sep="_"))-4) ,]
-        inFile=tryCatch({
-          readLAS(paste(a,"\\", plot_nums[m], sep=""), short=FALSE)
-        }, error=function(e){
-          NULL
-        }
-        )
-        inFile=unique(inFile)
-        if ((!is.null(inFile)) &(length(plotShape)>0)){
-          high_pts=pnt_fnder(inFile)
-          e=extent(plotShape)
-          e_b=extent(plotShape_b)
-          #unbufed=inFile[inFile[,1]>e[1] & inFile[,1]<e[2] & inFile[,2]>e[3] & inFile[,2]<e[4],]
-          
-          #some plots are just screwed up, get rid of huge plots
-          if ((e[2]-e[1])>100 || (e[4]-e[3])>100){
-            e=extent(inShape[inShape$Plot == plots[(m-1)],])
-          }
-          
-          ppmr<- raster(plotShape, ncol=(e[2]-e[1]), nrow=(e[4]-e[3]))
-          ppm <- rasterize(subset(inFile,inFile[,5]==1)[, 1:2], ppmr, subset(inFile,inFile[,5]==1)[, 5], fun='count')
-          ppm[is.na(ppm[])] <- 0  
-          ppm <- raster::mask(ppm, plotShape)
-          cell_ppm=cellStats(ppm, stat='mean')
-          tin <- tiner()
-          tiff=tin[[1]]
-          rumple=tin[[2]]
-          
-          plot_coord=coordinates(plotShape)
-          #WARNING, takes a really long time
-          prod=extract(SiteProd,matrix(plot_coord, ncol=2))   
-          
-          if (length(na.omit(getValues(ppmi)))<95){
-            NULL}
-          else{
-            #cell_ppm=nrow(subset(inFile,inFile[,5]==1))/400  #####COVARIATE
-            scan_angle_mean=mean(abs(inFile[,10]))
-            scan_angle_sd=sd(abs(inFile[,10]))
-            leaves="off"  #####COVARIATE
-            my_metrics=lclmaxer(tiff, plotShape,plotShape_b)
-            my_metrics[is.na(my_metrics)] <- 0
-            c(INVS[s],Aquisiton, substr(plot_nums[m],1,nchar(plot_nums[m])-4), my_metrics,rumple,cell_ppm,scan_angle_mean,scan_angle_sd, leaves, prod)
-          }
-        }
-      }
-      results=data.frame(results)
-      colnames(results)=c("INV","Aquisiton","Plot",
-                          #general CHM metrics
-                          "total_mean","total_median","total_sd","total_range","total_skew","total_kurt","Perc_Above_P20","Perc_Above_P40",
-                          "Perc_Above_P60","Perc_Above_P80","Perc_Above_P95","Perc_Above_5m","Perc_Above_10m","Perc_Above_15m","Perc_Above_20m",
-                          "Perc_Above_25m","Perc_Above_35m","Percentile_20","Percentile_40","Percentile_60","Percentile_80","Percentile_95",
-                          #Canopy complexity metrics
-                          "mean_dists_NB","SD_dists_NB","skew_dists_NB","kurt_dists_NB","mean_dists_B","SD_dists_B","skew_dists_B","kurt_dists_B",
-                          "mean_growing_space","sd_growing_space","max_growing_space","mean_growing_spaceNB","sd_growing_spaceNB",
-                          "canopy_cover_NB","csr","rugoseS_count","rugoseS_mean","rugoseS_sd","rugoseL_mean","rugoseL_sd", 
-                          "pt2Sedge_mean", "pt2Sedge_max", "SIMH","GINIH","TDH","CEH",#"SIMV","GINIV","TDV",
-                          "out_in_ratioC",
-                          "out_in_ratioH",
-                          #Tree metrics
-                          "mean_crown_area_B","SD_crown_area_B","max_crown_area_B","watershed_count_inplot","mean_crown_area_NB",
-                          "max_crown_area_NB","encroaching_tree_count","encroach_area","encroach_mean","perc_in_tally",
-                          "biomass_in","biomass_tot","crown_volume_tot","crown_volume_in","basal_area_tot","basal_area_in",
-                          "softwoodyness","mean_crown_volumes","SD_crown_volumes","mean_top_ht","tot_top_ht","mean_ht",
-                          "mean_residuals","sd_residuals","mean_positivity","sd_positivity","mean_top_positivity","mean_raw_pointy",
-                          "sd_raw_pointy","mean_pointy","sd_pointy","mean_off_cent","sd_off_cent","pt2WSedge_mean","pt2WSedge_sd",
-                          "pt2WSedge_max","rugose_WS_perc","heightB_mean","heightB_sd","heightB_med","heightB_max","heightB_min",
-                          "heightB_25","heightB_75","heightB_90","countB_P30","countB_P20","countB_P10","countB","height_mean",
-                          "height_sd","height_max","height_25","height_75","count_P30","count_P20","count_P10","count", "heightLM_mean",
-                          "heightLM_sd", "countLM_P30", "countLM_P20", "countLM_P10", "countLM",
-                          #Competition metrics summed
-                          "mean_obscured","sd_obscured","mean_shadowed","sd_shadowed","kurt_shadowed","sky_view_areas_m","sky_view_areas_sd",
-                          "neighbor_top_dist_m","neighbor_top_dist_sd","rumple",
-                          #Aquisition metrics
-                          "cell_ppm","scan_angle_mean","scan_angle_sd", "leaves", "prod")
+for (file in 1:length(files)){
+  tryCatch({
+    inpoints=tryCatch({
+      readLAS(paste(directory,files[file], sep="\\"), short=FALSE)
+    }, error=function(e){
+      NULL
+    }
+    )
+    e=extent(inpoints[,1:2])
+    start_pts=expand.grid(x=seq(from=e[1], to=e[2], by=10),y=seq(from=e[3], to=e[4],by=10))
+    extents=NULL
+    area=100
+    for (botpt in 1:nrow(start_pts)){
+      plot_ext=extent(start_pts[botpt, 1], start_pts[botpt, 1]+10, start_pts[botpt,2], start_pts[botpt,2]+10)
+      plot_ext=plot_ext+10
+      extents=append(extents,plot_ext)
+    }
+
+    results=NULL
+    results=foreach(p=1:length(extents), .combine='rbind', .errorhandling="pass") %dopar% {
+      library("raster", lib.loc="~/R/win-library/3.3")
+      library("spatstat", lib.loc="~/R/win-library/3.3")
+      library("plyr", lib.loc="~/R/win-library/3.3")
+      library("doParallel", lib.loc="~/R/win-library/3.3")
+      library("aspace", lib.loc="~/R/win-library/3.3")
+      library("maptools", lib.loc="~/R/win-library/3.3")
+      library("moments", lib.loc="~/R/win-library/3.3")
+      library("rLiDAR", lib.loc="~/R/win-library/3.2")
+      library("circular", lib.loc="~/R/win-library/3.3")
+      library("fields", lib.loc="~/R/win-library/3.3")
+      library("RANN")
+      library("tripack")
+      e_b=extents[p][[1]]
+      e=e_b-10
+      plotShape_b=as(e_b, 'SpatialPolygons')
+      plotShape=as(e, 'SpatialPolygons')
       
-      write.table(results, file=paste("G:\\1_19_2017_Combination\\Calculations\\",INVS[s],"_",Aquisiton,"_Metrics.csv", sep=""), sep=",", col.names= TRUE, row.names=FALSE)
-    }
-  }else{
-    aquis=paste(fpath,INVS[s], sep='')
-    if (length(aquis)>0){
-      for (a in aquis){
-        Aquisiton=basename(a)
-        plots=INV_plots[startsWith(INV_plots,INVS[s])]
-        plot_nums=list.files(a)
-        #plot_nums=sub('.*\\_', '', plots)
-        results=foreach(m=1:length(plot_nums), .combine='rbind', .errorhandling="pass", .packages=c("rgdal")) %dopar% {
-          library("raster", lib.loc="~/R/win-library/3.3")
-          library("spatstat", lib.loc="~/R/win-library/3.3")
-          library("plyr", lib.loc="~/R/win-library/3.3")
-          library("doParallel", lib.loc="~/R/win-library/3.3")
-          library("aspace", lib.loc="~/R/win-library/3.3")
-          library("maptools", lib.loc="~/R/win-library/3.3")
-          library("moments", lib.loc="~/R/win-library/3.3")
-          library("rLiDAR", lib.loc="~/R/win-library/3.2")
-          library("fields", lib.loc="~/R/win-library/3.3")
-          library("RANN")
-          library("tripack")
-          plotShape_b = inShape_b[inShape_b$INV_Plot==substr(paste(INVS[s],plot_nums[m], sep="_"),1,nchar(paste(INVS[s],plot_nums[m], sep="_"))-4) ,]
-          plotShape = inShape[inShape$INV_Plot==substr(paste(INVS[s],plot_nums[m], sep="_"),1,nchar(paste(INVS[s],plot_nums[m], sep="_"))-4) ,]
-          inFile=tryCatch({
-            readLAS(paste(a,"\\", plot_nums[m], sep=""), short=FALSE)
-          }, error=function(e){
-            NULL
-          }
-          )
-          inFile=unique(inFile)
-          if ((!is.null(inFile)) &(length(plotShape)>0)){
-            high_pts=pnt_fnder(inFile)
-            e=extent(plotShape)
-            e_b=extent(plotShape_b)
-            #unbufed=inFile[inFile[,1]>e[1] & inFile[,1]<e[2] & inFile[,2]>e[3] & inFile[,2]<e[4],]
-            
-            #some plots are just screwed up, get rid of huge plots
-            if ((e[2]-e[1])>100 || (e[4]-e[3])>100){
-              e=extent(inShape[inShape$Plot == plots[(m-1)],])
-            }
-            
-            ppmr<- raster(plotShape, ncol=(e[2]-e[1]), nrow=(e[4]-e[3]))
-            ppm <- rasterize(subset(inFile,inFile[,5]==1)[, 1:2], ppmr, subset(inFile,inFile[,5]==1)[, 5], fun='count')
-            ppm[is.na(ppm[])] <- 0  
-            ppm <- raster::mask(ppm, plotShape)
-            cell_ppm=cellStats(ppm, stat='mean')
-            tin <- tiner()
-            tiff=tin[[1]]
-            rumple=tin[[2]]
-            
-            plot_coord=coordinates(plotShape)
-            #WARNING, takes a really long time
-            prod=extract(SiteProd,matrix(plot_coord, ncol=2))   
-            
-            if (length(na.omit(getValues(ppmi)))<95){
-              NULL}
-            else{
-              #cell_ppm=nrow(subset(inFile,inFile[,5]==1))/400  #####COVARIATE
-              scan_angle_mean=mean(abs(inFile[,10]))
-              scan_angle_sd=sd(abs(inFile[,10]))
-              leaves="off"  #####COVARIATE
-              my_metrics=lclmaxer(tiff, plotShape,plotShape_b)
-              #my_metrics[is.na(my_metrics)] <- 0
-              c(INVS[s],Aquisiton, substr(plot_nums[m],1,nchar(plot_nums[m])-4), my_metrics,rumple,cell_ppm,scan_angle_mean,scan_angle_sd, leaves, prod)
-            }
-          }
+      #clip lidar plot
+      inFile=inpoints[inpoints[,1]>e_b[1] & inpoints[,1]<e_b[2] & inpoints[,2]>e_b[3] & inpoints[,2]<e_b[4],]
+      
+      if ((!is.null(inFile)) &(length(plotShape)>0)){
+        high_pts=pnt_fnder(inFile)
+        ppmr<- raster(plotShape, ncol=(e[2]-e[1]), nrow=(e[4]-e[3]))
+        ppm <- rasterize(subset(inFile,inFile[,5]==1)[, 1:2], ppmr, subset(inFile,inFile[,5]==1)[, 5], fun='count')
+        ppm[is.na(ppm[])] <- 0  
+        ppm <- raster::mask(ppm, plotShape)
+        cell_ppm=cellStats(ppm, stat='mean')
+        tin <- tiner(high_pts)
+        DSM=tin[[1]]
+        rumple=tin[[2]]
+        grounds=inFile[inFile[,9]==2,]
+        tin=tiner(grounds)
+        DEM=tin[[1]]
+        tiff=DSM-DEM
+        crs(DEM)="+proj=utm +zone=19. +datum=NAD83"
+        slope=mean(na.omit(getValues(terrain(DEM, opt='slope', unit='degrees'))))
+        degrees=na.omit(getValues(terrain(DEM, opt='aspect', unit='degrees')))
+        circle=circular(degrees,units="degrees")
+        aspect=mean.circular(circle)
+        if(aspect<0){
+          aspect=360+aspect
         }
-        colnames(results)=c("INV","Aquisiton","Plot",
-                            #general CHM metrics
-                            "total_mean","total_median","total_sd","total_range","total_skew","total_kurt","Perc_Above_P20","Perc_Above_P40",
-                            "Perc_Above_P60","Perc_Above_P80","Perc_Above_P95","Perc_Above_5m","Perc_Above_10m","Perc_Above_15m","Perc_Above_20m",
-                            "Perc_Above_25m","Perc_Above_35m","Percentile_20","Percentile_40","Percentile_60","Percentile_80","Percentile_95",
-                            #Canopy complexity metrics
-                            "mean_dists_NB","SD_dists_NB","skew_dists_NB","kurt_dists_NB","mean_dists_B","SD_dists_B","skew_dists_B","kurt_dists_B",
-                            "mean_growing_space","sd_growing_space","max_growing_space","mean_growing_spaceNB","sd_growing_spaceNB",
-                            "canopy_cover_NB","csr","rugoseS_count","rugoseS_mean","rugoseS_sd","rugoseL_mean","rugoseL_sd", 
-                            "pt2Sedge_mean", "pt2Sedge_max", "SIMH","GINIH","TDH","CEH",#"SIMV","GINIV","TDV",
-                            "out_in_ratioC",
-                            "out_in_ratioH",
-                            #Tree metrics
-                            "mean_crown_area_B","SD_crown_area_B","max_crown_area_B","watershed_count_inplot","mean_crown_area_NB",
-                            "max_crown_area_NB","encroaching_tree_count","encroach_area","encroach_mean","perc_in_tally",
-                            "biomass_in","biomass_tot","crown_volume_tot","crown_volume_in","basal_area_tot","basal_area_in",
-                            "softwoodyness","mean_crown_volumes","SD_crown_volumes","mean_top_ht","tot_top_ht","mean_ht",
-                            "mean_residuals","sd_residuals","mean_positivity","sd_positivity","mean_top_positivity","mean_raw_pointy",
-                            "sd_raw_pointy","mean_pointy","sd_pointy","mean_off_cent","sd_off_cent","pt2WSedge_mean","pt2WSedge_sd",
-                            "pt2WSedge_max","rugose_WS_perc","heightB_mean","heightB_sd","heightB_med","heightB_max","heightB_min",
-                            "heightB_25","heightB_75","heightB_90","countB_P30","countB_P20","countB_P10","countB","height_mean",
-                            "height_sd","height_max","height_25","heigh
-                            t_75","count_P30","count_P20","count_P10","count", "heightLM_mean",
-                            "heightLM_sd", "countLM_P30", "countLM_P20", "countLM_P10", "countLM",
-                            #Competition metrics summed
-                            "mean_obscured","sd_obscured","mean_shadowed","sd_shadowed","kurt_shadowed","sky_view_areas_m","sky_view_areas_sd",
-                            "neighbor_top_dist_m","neighbor_top_dist_sd","rumple",
-                            #Aquisition metrics
-                            "cell_ppm","scan_angle_mean","scan_angle_sd", "leaves", "prod")
+        TRI=mean(na.omit(getValues(terrain(DEM, opt='TRI'))))
         
-        write.table(results, file=paste("G:\\1_19_2017_Combination\\Calculations\\",INVS[s],"_",Aquisiton,"_Metrics.csv", sep=""), sep=",", col.names= TRUE, row.names=FALSE)
+        plot_coord=coordinates(plotShape)
+        #WARNING, takes a really long time
+        prod=extract(SiteProd,matrix(plot_coord, ncol=2))   
+        
+        if (length(na.omit(getValues(ppmi)))<95){
+          NULL}
+        else{
+          #cell_ppm=nrow(subset(inFile,inFile[,5]==1))/400  #####COVARIATE
+          scan_angle_mean=mean(abs(inFile[,10]))
+          scan_angle_sd=sd(abs(inFile[,10]))
+          leaves="off"  #####COVARIATE
+          my_metrics=lclmaxer(tiff, plotShape,plotShape_b)
+          my_metrics[is.na(my_metrics)] <- 0
+          c(plot_coord, my_metrics,cell_ppm,scan_angle_mean,scan_angle_sd, leaves, prod, slope, aspect, TRI)
+        }
       }
     }
-  }
+    colnames(results)=c("INV","Aquisiton","Plot",
+                        #general CHM metrics
+                        "total_mean","total_median","total_sd","total_range","total_skew","total_kurt","Perc_Above_P20","Perc_Above_P40",
+                        "Perc_Above_P60","Perc_Above_P80","Perc_Above_P95","Perc_Above_5m","Perc_Above_10m","Perc_Above_15m","Perc_Above_20m",
+                        "Perc_Above_25m","Perc_Above_35m","Percentile_20","Percentile_40","Percentile_60","Percentile_80","Percentile_95",
+                        #Canopy complexity metrics
+                        "mean_dists_NB","SD_dists_NB","skew_dists_NB","kurt_dists_NB","mean_dists_B","SD_dists_B","skew_dists_B","kurt_dists_B",
+                        "mean_growing_space","sd_growing_space","max_growing_space","mean_growing_spaceNB","sd_growing_spaceNB",
+                        "canopy_cover_NB","csr","rugoseS_count","rugoseS_mean","rugoseS_sd","rugoseL_mean","rugoseL_sd", 
+                        "pt2Sedge_mean", "pt2Sedge_max", "mean_off_cent","sd_off_cent","SIMH","GINIH","TDH","CEH","SIMV","GINIV","TDV","out_in_ratioC",
+                        "out_in_ratioH",
+                        #Tree metrics
+                        "mean_crown_area_B","SD_crown_area_B","max_crown_area_B","watershed_count_inplot","mean_crown_area_NB",
+                        "max_crown_area_NB","encroaching_tree_count","encroach_area","encroach_mean","perc_in_tally",
+                        "biomass_in","biomass_tot","crown_volume_tot","crown_volume_in","basal_area_tot","basal_area_in",
+                        "softwoodyness","mean_crown_volumes","SD_crown_volumes","mean_top_ht","tot_top_ht","mean_ht",
+                        "mean_residuals","sd_residuals","mean_positivity","sd_positivity","mean_top_positivity","mean_raw_pointy",
+                        "sd_raw_pointy","mean_pointy","sd_pointy","mean_off_cent","sd_off_cent","pt2WSedge_mean","pt2WSedge_sd",
+                        "pt2WSedge_max","rugose_WS_perc","heightB_mean","heightB_sd","heightB_med","heightB_max","heightB_min",
+                        "heightB_25","heightB_75","heightB_90","countB_P30","countB_P20","countB_P10","countB","height_mean",
+                        "height_sd","height_max","height_25","height_75","count_P30","count_P20","count_P10","count", "heightLM_mean",
+                        "heightLM_sd", "countLM_P30", "countLM_P20", "countLM_P10", "countLM",
+                        #Competition metrics summed
+                        "mean_obscured","sd_obscured","mean_shadowed","sd_shadowed","kurt_shadowed","sky_view_areas_m","sky_view_areas_sd",
+                        "neighbor_top_dist_m","neighbor_top_dist_sd",
+                        #Aquisition metrics
+                        "cell_ppm","scan_angle_mean","scan_angle_sd", "leaves", "prod")
+    
+    write.table(results, file=paste(directory,'\\', substr(files[file],1,nchar(files[file])-4),'.csv', sep=""), sep=",", col.names= TRUE, row.names=FALSE)
+    print(file/length(files))
+  }, error=function(e){cat("ERROR : ", conditionMessage(e), " WITH ", files[file], "              ")})
 }
 stopCluster(cl) 
